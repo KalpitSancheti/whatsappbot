@@ -76,19 +76,29 @@ class CalendarTool:
                 orderBy='startTime'
             ).execute()
             events = events_result.get('items', [])
-            new_start = datetime.datetime.strptime(f"{date} {start_time_fmt}", "%Y-%m-%d %H:%M")
-            new_end = datetime.datetime.strptime(f"{date} {end_time_fmt}", "%Y-%m-%d %H:%M")
+            import pytz
+            tz = pytz.timezone('Asia/Kolkata')
+            new_start = tz.localize(datetime.datetime.strptime(f"{date} {start_time_fmt}", "%Y-%m-%d %H:%M"))
+            new_end = tz.localize(datetime.datetime.strptime(f"{date} {end_time_fmt}", "%Y-%m-%d %H:%M"))
             for event_item in events:
                 e_start = event_item['start'].get('dateTime', event_item['start'].get('date'))
                 e_end = event_item['end'].get('dateTime', event_item['end'].get('date'))
                 if 'T' in e_start:
                     e_start_dt = datetime.datetime.fromisoformat(e_start.replace('Z', '+00:00'))
+                    if e_start_dt.tzinfo is None:
+                        e_start_dt = tz.localize(e_start_dt)
+                    else:
+                        e_start_dt = e_start_dt.astimezone(tz)
                 else:
-                    e_start_dt = datetime.datetime.strptime(e_start, "%Y-%m-%d")
+                    e_start_dt = tz.localize(datetime.datetime.strptime(e_start, "%Y-%m-%d"))
                 if 'T' in e_end:
                     e_end_dt = datetime.datetime.fromisoformat(e_end.replace('Z', '+00:00'))
+                    if e_end_dt.tzinfo is None:
+                        e_end_dt = tz.localize(e_end_dt)
+                    else:
+                        e_end_dt = e_end_dt.astimezone(tz)
                 else:
-                    e_end_dt = datetime.datetime.strptime(e_end, "%Y-%m-%d")
+                    e_end_dt = tz.localize(datetime.datetime.strptime(e_end, "%Y-%m-%d"))
                 if not (new_end <= e_start_dt or new_start >= e_end_dt):
                     print("[CalendarTool] Slot conflict detected.", flush=True)
                     return f"Slot {start_time_fmt}-{end_time_fmt} on {date} is not free. Please choose another time."
