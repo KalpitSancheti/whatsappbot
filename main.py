@@ -242,6 +242,40 @@ def start_clist_cron():
     t = threading.Thread(target=cron_loop, daemon=True)
     t.start()
 
+from contest_notifier import send_morning_digest, send_upcoming_alerts
+import datetime
+
+def start_contest_notifier():
+    def morning_digest_loop():
+        while True:
+            now = datetime.datetime.now()
+            # Run at 8:00 AM local time
+            next_run = now.replace(hour=8, minute=0, second=0, microsecond=0)
+            if now >= next_run:
+                next_run += datetime.timedelta(days=1)
+            sleep_seconds = (next_run - now).total_seconds()
+            print(f"[Contest Notifier] Sleeping {sleep_seconds/60:.1f} minutes until next morning digest...")
+            time.sleep(sleep_seconds)
+            try:
+                print("[Contest Notifier] Sending morning digest...")
+                send_morning_digest()
+            except Exception as e:
+                print(f"[Contest Notifier] Error in morning digest: {e}")
+
+    def upcoming_alerts_loop():
+        while True:
+            try:
+                send_upcoming_alerts()
+            except Exception as e:
+                print(f"[Contest Notifier] Error in upcoming alerts: {e}")
+            time.sleep(300)  # 5 minutes
+
+    t1 = threading.Thread(target=morning_digest_loop, daemon=True)
+    t2 = threading.Thread(target=upcoming_alerts_loop, daemon=True)
+    t1.start()
+    t2.start()
+
 if __name__ == "__main__":
     start_clist_cron()
+    start_contest_notifier()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
