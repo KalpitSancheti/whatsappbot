@@ -63,6 +63,13 @@ class CalendarTool:
             service = build('calendar', 'v3', credentials=creds)
             print(f"[CalendarTool] Calendar ID: {calendar_id}", flush=True)
             print(f"[CalendarTool] Event to insert: {json.dumps(event, indent=2)}", flush=True)
+            # Print the list of calendars the service account can access
+            try:
+                calendar_list = service.calendarList().list().execute()
+                print("[CalendarTool] Accessible calendars:")
+                print(json.dumps(calendar_list, indent=2))
+            except Exception as cal_list_exc:
+                print(f"[CalendarTool] Failed to fetch calendar list: {cal_list_exc}", flush=True)
             # Fetch events for the day (use UTC with Z)
             start_of_day = datetime.datetime.strptime(date, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
             end_of_day = datetime.datetime.strptime(date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=0)

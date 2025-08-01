@@ -80,25 +80,35 @@ You are an advanced assistant with access to these tools:
 
 - echo: Echo back the user's message. Input: any string. Output: the same string.
 
-How to use tools:
-- If the user asks about their schedule, free slots, or meetings for a day, use calendar_query.
-- If the user wants to schedule something, use calendar_query first to get free slots, then use calendar to add the event in a free slot.
-- If the user asks to schedule, book, or set up a meeting or event, DO NOT ask for confirmation. Always use the calendar_query tool to check for free slots before scheduling. Only schedule an event in a slot that is confirmed to be free. If the requested slot is not free, suggest the next available slot. Always pick the first available free slot in the requested time range (e.g., 'evening' means 17:00-22:00) and schedule the event using the calendar tool. Only ask for confirmation if the user's request is ambiguous or if there are conflicting events. You MUST always call the calendar tool to actually schedule the event, and only confirm the booking after you have received the tool result. Never confirm a booking unless the calendar tool has been called and has returned a successful result. If you have just received a calendar_query result and the user's intent was to schedule, you MUST always call the calendar tool to actually schedule the event in a free slot. Never answer with general information or code samples—always proceed to schedule the event using the tool.
-- If you need to know the current time to answer, use the time tool.
+IMPORTANT RULES FOR SCHEDULING:
+- If the user wants to schedule, book, set up, or add an event, you MUST always call the calendar_query tool first to get free slots.
+- After receiving the result from calendar_query, you MUST call the calendar tool to actually schedule the event in a free slot.
+- If the user provides a relative date (e.g., "day after tomorrow", "next Monday", "in 3 days"), you MUST first call the time tool to get the current date, then calculate the absolute date in YYYY-MM-DD format. Use this absolute date in all subsequent tool calls.
+- Never ask the user to rephrase with an absolute date; always resolve it yourself using the time tool.
+- NEVER confirm a booking or event unless you have called the calendar tool and it has returned a successful result.
+- If you do not call the calendar tool, you MUST NOT say the event is scheduled.
+- If the user's request is ambiguous, ask for clarification, but do not confirm any event without a tool call.
+- Never answer with general information or code samples—always proceed to schedule the event using the tool.
 - Always provide clear, user-friendly responses after tool calls.
 
-Example:
+EXAMPLE:
 User: schedule a meeting in the evening with yug today
-Assistant: (calls calendar_query for today, finds free slots, then immediately calls calendar to schedule the meeting in the first available evening slot, e.g., 17:00-18:00, and confirms the booking to the user)
+Assistant: (calls calendar_query for today)
+Assistant: (calls calendar to schedule the meeting in the first available evening slot, e.g., 17:00-18:00)
+Assistant: (only after successful tool call) "Your meeting with yug is scheduled for 5pm to 6pm today."
 
 User: add a reminder to fill form at 3 pm
 Assistant: (calls calendar tool with start_time 15:00, end_time 15:30)
 
 User: set up a play session at 10pm today
-Assistant: (calls calendar_query for today, finds free slots, then calls calendar tool to schedule the event at 22:00-23:00, and only then confirms the booking to the user)
+Assistant: (calls calendar_query for today)
+Assistant: (calls calendar tool to schedule the event at 22:00-23:00)
+Assistant: (only after successful tool call) "Your play session is scheduled for 10pm to 11pm today."
 
 User: schedule a meet at 8 pm today
-Assistant: (calls calendar_query for today, finds free slots, then calls calendar tool to schedule the event at 20:00-21:00, and only then confirms the booking to the user)
+Assistant: (calls calendar_query for today)
+Assistant: (calls calendar tool to schedule the event at 20:00-21:00)
+Assistant: (only after successful tool call) "Your meeting is scheduled for 8pm to 9pm today."
 
 User: cancel my 8 pm meeting today
 Assistant: (calls calendar_delete tool with title 'meeting' and date for today, confirms deletion)
@@ -171,33 +181,67 @@ workflow.set_entry_point("tools")
 workflow.set_finish_point("tools")
 graph_executor = workflow.compile()
 
+from clist_rating_checker import fetch_current_ratings
 # WhatsApp webhook route
 @app.route("/whatsapp", methods=["POST"])
 def whatsapp():
     print("[Form Data]", dict(request.form))
 
-    incoming_msg = request.form.get("Body", "").strip()
+    incoming_msg = request.form.get("Body", "").strip().lower()
     print(f"[User] {incoming_msg}")
 
-    try:
-        print("[DEBUG] About to invoke graph_executor with:", {"input": incoming_msg})
-        result = graph_executor.invoke({"input": incoming_msg})
-        print("[DEBUG] Type of result:", type(result))
-        print("[LangGraph Result]", result)
+    # Handle CLIST rating query
+    if incoming_msg in ["rating", "clist", "ratings", "show ratings", "show rating"]:
+        try:
+            ratings = fetch_current_ratings()
+            if ratings:
+                response_text = "⭐️ Your Current Ratings:\n\n" + "\n".join([f"• {k}: {v}" for k, v in ratings.items()])
+            else:
+                response_text = "No ratings found."
+        except Exception as e:
+            print(f"[CLIST Query Error] {e}")
+            response_text = "Failed to fetch ratings."
+    else:
+        try:
+            print("[DEBUG] About to invoke graph_executor with:", {"input": incoming_msg})
+            result = graph_executor.invoke({"input": incoming_msg})
+            print("[DEBUG] Type of result:", type(result))
+            print("[LangGraph Result]", result)
 
-        if not result or not isinstance(result, dict):
-            raise ValueError("LangGraph returned no result or invalid structure")
+            if not result or not isinstance(result, dict):
+                raise ValueError("LangGraph returned no result or invalid structure")
 
-        response_text = result.get("output", "Sorry, no output.")
+            response_text = result.get("output", "Sorry, no output.")
 
-    except Exception as e:
-        import traceback
-        print("[Exception]", traceback.format_exc())
-        response_text = "Sorry, something went wrong."
+        except Exception as e:
+            import traceback
+            print("[Exception]", traceback.format_exc())
+            response_text = "Sorry, something went wrong."
 
     resp = MessagingResponse()
     resp.message(response_text)
     return str(resp)
 
+import threading
+import time
+from clist_rating_checker import check_and_notify_ratings
+
+def start_clist_cron():
+    def cron_loop():
+        while True:
+            try:
+                print("[CLIST Cron] Checking ratings...")
+                changes = check_and_notify_ratings()
+                if changes:
+                    print(f"[CLIST Cron] Notified: {changes}")
+                else:
+                    print("[CLIST Cron] No changes.")
+            except Exception as e:
+                print(f"[CLIST Cron] Error: {e}")
+            time.sleep(1800)  # 30 minutes
+    t = threading.Thread(target=cron_loop, daemon=True)
+    t.start()
+
 if __name__ == "__main__":
+    start_clist_cron()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
