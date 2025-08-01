@@ -238,7 +238,7 @@ def start_clist_cron():
                     print("[CLIST Cron] No changes.")
             except Exception as e:
                 print(f"[CLIST Cron] Error: {e}")
-            time.sleep(1800)  # 30 minutes
+            time.sleep(300)  # 5 minutes
     t = threading.Thread(target=cron_loop, daemon=True)
     t.start()
 
