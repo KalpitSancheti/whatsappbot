@@ -81,15 +81,19 @@ You are an advanced assistant with access to these tools:
 - echo: Echo back the user's message. Input: any string. Output: the same string.
 
 IMPORTANT RULES FOR SCHEDULING:
-- If the user wants to schedule, book, set up, or add an event, you MUST always call the calendar_query tool first to get free slots.
+- If the user wants to schedule, book, set up, add, remind, create, or register an event (including any of these keywords: "schedule", "book", "set up", "add", "remind", "create event", "register", "make appointment", "arrange", "organize", "plan", "fix meeting", "put on calendar", "add reminder"), you MUST always call the calendar_query tool first to get free slots.
 - After receiving the result from calendar_query, you MUST call the calendar tool to actually schedule the event in a free slot.
+- You are STRICTLY FORBIDDEN from confirming, implying, or suggesting that an event is scheduled, booked, or added until AFTER you have called the calendar tool and it has returned a successful result. If you have not called the calendar tool, you MUST NOT say or imply that the event is scheduled in any way.
 - If the user provides a relative date (e.g., "day after tomorrow", "next Monday", "in 3 days"), you MUST first call the time tool to get the current date, then calculate the absolute date in YYYY-MM-DD format. Use this absolute date in all subsequent tool calls.
 - Never ask the user to rephrase with an absolute date; always resolve it yourself using the time tool.
-- NEVER confirm a booking or event unless you have called the calendar tool and it has returned a successful result.
-- If you do not call the calendar tool, you MUST NOT say the event is scheduled.
 - If the user's request is ambiguous, ask for clarification, but do not confirm any event without a tool call.
 - Never answer with general information or code samples—always proceed to schedule the event using the tool.
 - Always provide clear, user-friendly responses after tool calls.
+
+EXTRA ENFORCEMENT:
+- For any user input containing scheduling intent (any of the above keywords), you MUST call calendar_query and then calendar before confirming the event. If you skip the calendar tool, you are making a mistake.
+- If you have just called calendar_query for a scheduling intent, you MUST immediately call the calendar tool next (unless the user cancels or changes their mind). Do NOT skip this step. Only after the calendar tool is called and returns success, you may confirm the event to the user.
+- If you ever generate a confirmation message before calling the calendar tool for a scheduling intent, you are making a mistake. Always call the calendar tool before confirming.
 
 EXAMPLE:
 User: schedule a meeting in the evening with yug today
@@ -275,7 +279,28 @@ def start_contest_notifier():
     t1.start()
     t2.start()
 
+import requests
+
+@app.route('/ping')
+def ping():
+    print("Ping received on Service A")
+    return "Service A is alive", 200
+
+# Ping Service B every 5 minutes
+def ping_service_b():
+    service_b_url = os.environ.get("SERVICE_B_URL")
+    if service_b_url:
+        try:
+            response = requests.get(service_b_url, timeout=10)
+            print("Pinged Service B:", response.status_code)
+        except Exception as e:
+            print("Failed to ping B:", e)
+    else:
+        print("SERVICE_B_URL not set; skipping ping.")
+    threading.Timer(300, ping_service_b).start()
+
 if __name__ == "__main__":
     start_clist_cron()
     start_contest_notifier()
+    ping_service_b()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)

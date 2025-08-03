@@ -1,11 +1,9 @@
 import requests
-import json
-from utils import send_whatsapp
+from utils import send_whatsapp, get_ratings, set_ratings
 import os
 
 # CLIST API config
 CLIST_URL = "https://clist.by/api/v4/json/coder/35625/?username=kalpitdon&api_key=18d91248076b10abca8b005576f16d18740b20ef"
-RATING_FILE = "last_ratings.json"
 
 def fetch_current_ratings():
     r = requests.get(CLIST_URL)
@@ -13,11 +11,7 @@ def fetch_current_ratings():
 
 def check_and_notify_ratings():
     current = fetch_current_ratings()
-    try:
-        with open(RATING_FILE, 'r') as f:
-            old = json.load(f)
-    except Exception:
-        old = {}
+    old = get_ratings()
     changes = []
     for platform, new_rating in current.items():
         old_rating = old.get(platform)
@@ -32,6 +26,5 @@ def check_and_notify_ratings():
     if changes:
         msg = "📈 Rating Update!\n\n" + "\n".join(changes)
         send_whatsapp(msg)
-    with open(RATING_FILE, 'w') as f:
-        json.dump(current, f)
+    set_ratings(current)
     return changes  # For logging or debugging
