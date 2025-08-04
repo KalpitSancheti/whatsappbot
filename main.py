@@ -254,7 +254,7 @@ def start_contest_notifier():
         while True:
             now = datetime.datetime.now()
             # Run at 8:00 AM local time
-            next_run = now.replace(hour=8, minute=0, second=0, microsecond=0)
+            next_run = now.replace(hour=2, minute=30, second=0, microsecond=0)
             if now >= next_run:
                 next_run += datetime.timedelta(days=1)
             sleep_seconds = (next_run - now).total_seconds()
