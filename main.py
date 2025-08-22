@@ -1,4 +1,5 @@
 import os
+from flask_cors import CORS
 import traceback
 from flask import Flask, request
 from dotenv import load_dotenv
@@ -13,6 +14,8 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # Flask app setup
 app = Flask(__name__)
+service_b_url = "https://service-b-ywho.onrender.com"
+CORS(app, origins=[service_b_url] if service_b_url else ["*"], supports_credentials=True)
 
 # Perplexity LLM
 
